@@ -11,6 +11,8 @@ import {
 } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import axios from "axios";
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
 
 // List of supported languages
 const LANGUAGES = [
@@ -39,10 +41,16 @@ function EditorPage() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("python3");
   const codeRef = useRef(null);
-
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const Location = useLocation();
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const [codeHistory, setCodeHistory] = useState(() => {
+    // Load from localStorage if available
+    const saved = localStorage.getItem(`codeHistory-${roomId}`);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showHistory, setShowHistory] = useState(false);
 
   const socketRef = useRef(null);
 
@@ -132,11 +140,57 @@ function EditorPage() {
     setIsCompileWindowOpen(!isCompileWindowOpen);
   };
 
+  // Helper: is mobile
+  const isMobile = window.innerWidth < 768;
+
+  // Track code changes for history
+  const handleCodeChange = (code) => {
+    codeRef.current = code;
+    setCodeHistory((prev) => {
+      if (prev.length === 0 || prev[prev.length - 1] !== code) {
+        const updated = [...prev, code];
+        localStorage.setItem(`codeHistory-${roomId}` , JSON.stringify(updated));
+        return updated;
+      }
+      return prev;
+    });
+  };
+  // Revert to a previous version
+  const revertToVersion = (idx) => {
+    const code = codeHistory[idx];
+    codeRef.current = code;
+    // Sync with editor and others
+    if (socketRef.current) {
+      socketRef.current.emit(ACTIONS.CODE_CHANGE, {
+        roomId,
+        code,
+      });
+    }
+    setCodeHistory((prev) => prev.slice(0, idx + 1));
+    localStorage.setItem(`codeHistory-${roomId}` , JSON.stringify(codeHistory.slice(0, idx + 1)));
+    setShowHistory(false);
+  };
+
   return (
     <div className="container-fluid vh-100 d-flex flex-column">
-      <div className="row flex-grow-1">
+      <div className="row flex-grow-1 position-relative">
+        {/* Sidebar toggle button for mobile */}
+        {isMobile && (
+          <button
+            className="btn btn-secondary position-absolute"
+            style={{ top: 10, left: 10, zIndex: 2000 }}
+            onClick={() => setSidebarOpen((open) => !open)}
+          >
+            {sidebarOpen ? "Hide Menu" : "Show Menu"}
+          </button>
+        )}
         {/* Client panel */}
-        <div className="col-md-2 bg-dark text-light d-flex flex-column">
+        <div
+          className={`col-md-2 bg-dark text-light d-flex flex-column ${
+            isMobile ? (sidebarOpen ? "d-block position-absolute h-100" : "d-none") : ""
+          }`}
+          style={isMobile && sidebarOpen ? { width: "80vw", maxWidth: 320, left: 0, top: 0, zIndex: 1500, boxShadow: "2px 0 8px rgba(0,0,0,0.2)" } : {}}
+        >
           <img
             src="/images/codecast.png"
             alt="Logo"
@@ -166,9 +220,12 @@ function EditorPage() {
         </div>
 
         {/* Editor panel */}
-        <div className="col-md-10 text-light d-flex flex-column">
-          {/* Language selector */}
-          <div className="bg-dark p-2 d-flex justify-content-end">
+        <div className="col-md-10 text-light d-flex flex-column" style={isMobile ? { paddingLeft: sidebarOpen ? "80vw" : 0, transition: "padding-left 0.3s" } : {}}>
+          {/* History button */}
+          <div className="d-flex justify-content-between align-items-center bg-dark p-2">
+            <button className="btn btn-outline-info btn-sm" onClick={() => setShowHistory(true)}>
+              Code History
+            </button>
             <select
               className="form-select w-auto"
               value={selectedLanguage}
@@ -181,13 +238,10 @@ function EditorPage() {
               ))}
             </select>
           </div>
-
           <Editor
             socketRef={socketRef}
             roomId={roomId}
-            onCodeChange={(code) => {
-              codeRef.current = code;
-            }}
+            onCodeChange={handleCodeChange}
           />
         </div>
       </div>
@@ -236,6 +290,34 @@ function EditorPage() {
           {output || "Output will appear here after compilation"}
         </pre>
       </div>
+
+      {/* Code History Modal */}
+      <Modal show={showHistory} onHide={() => setShowHistory(false)} size="lg" scrollable>
+        <Modal.Header closeButton>
+          <Modal.Title>Code History</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {codeHistory.length === 0 ? (
+            <div>No history yet.</div>
+          ) : (
+            <ul className="list-group">
+              {codeHistory.map((code, idx) => (
+                <li key={idx} className="list-group-item d-flex justify-content-between align-items-center">
+                  <pre style={{ maxWidth: '80vw', overflowX: 'auto', margin: 0 }}>{code.slice(0, 200)}{code.length > 200 ? '...' : ''}</pre>
+                  <Button variant="outline-success" size="sm" onClick={() => revertToVersion(idx)}>
+                    Revert
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowHistory(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
