@@ -28,14 +28,22 @@ const languageConfig = {
 };
 
 // Enable CORS
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://codeeditorz.netlify.app"
+  ]
+}));
 
 // Parse JSON bodies
 app.use(express.json());
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000", // for local dev
+      "https://codeeditorz.netlify.app" // for production
+    ],
     methods: ["GET", "POST"],
   },
 });
