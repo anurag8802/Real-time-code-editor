@@ -16,7 +16,7 @@ import Button from 'react-bootstrap/Button';
 
 
 // List of supported languages
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 const LANGUAGES = [
   "python3",
   "java",
