@@ -14,7 +14,9 @@ import axios from "axios";
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
+
 // List of supported languages
+const API_URL = process.env.REACT_APP_API_URL;
 const LANGUAGES = [
   "python3",
   "java",
@@ -122,7 +124,7 @@ function EditorPage() {
   const runCode = async () => {
     setIsCompiling(true);
     try {
-      const response = await axios.post("http://localhost:5000/compile", {
+      const response = await axios.post(`${API_URL}/compile`, {
         code: codeRef.current,
         language: selectedLanguage,
       });
